@@ -3,14 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import defaultdict
 
+
 class LossCalulcator(nn.Module):
-    def __init__(self, temperature, distillation_weight):
+    def __init__(self, temperature, alpha):
         super().__init__()
 
-        self.temperature         = temperature
-        self.distillation_weight = distillation_weight
-        self.loss_log            = defaultdict(list)
-        self.kldiv               = nn.KLDivLoss(reduction='batchmean')
+        self.temperature = temperature
+        self.alpha = alpha
+        self.kl_div = nn.KLDivLoss(reduction='batchmean')
+        self.ce_loss = nn.CrossEntropyLoss()
 
     def forward(self, outputs, labels, teacher_outputs):
         """
@@ -19,24 +20,25 @@ class LossCalulcator(nn.Module):
         """
 
         # Distillation Loss
-        soft_target_loss = 0.0
-        soft_target_loss = self.kldiv(F.log_softmax(outputs/self.temperature, dim=1), F.softmax(teacher_outputs/self.temperature, dim=1)) * (self.temperature ** 2)
+        teacher_prob = nn.functional.softmax(teacher_outputs / self.temperature, dim=-1)
+        student_prob = nn.functional.log_softmax(outputs / self.temperature, dim=-1)
+        soft_targets_loss = self.kl_div(student_prob, teacher_prob) * (self.temperature ** 2)
 
-        # Ground Truth Loss
-        hard_target_loss = F.cross_entropy(outputs, labels, reduction='mean')
+        hard_targets_loss = self.ce_loss(outputs, labels)
 
-        total_loss = (soft_target_loss * self.distillation_weight) + hard_target_loss
+        total_loss = self.alpha * soft_targets_loss + (1 - self.alpha) * hard_targets_loss
+        return total_loss
 
         # Logging
-        if self.distillation_weight > 0:
-            self.loss_log['soft-target_loss'].append(soft_target_loss.item())
+        # if self.distillation_weight > 0:
+        #     self.loss_log['soft-target_loss'].append(soft_target_loss.item())
 
-        if self.distillation_weight < 1:
-            self.loss_log['hard-target_loss'].append(hard_target_loss.item())
+        # if self.distillation_weight < 1:
+        #     self.loss_log['hard-target_loss'].append(hard_target_loss.item())
 
-        self.loss_log['total_loss'].append(total_loss.item())
+        # self.loss_log['total_loss'].append(total_loss.item())
 
-        return total_loss
+        # return total_loss
 
     def get_log(self, length=100):
         log = []
