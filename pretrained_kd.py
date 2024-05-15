@@ -51,6 +51,7 @@ def train(student, teacher, dataloader, val_dataloader, optimizer, loss_calculat
                         'total time': total_duration, 
                         'kd loss' : loss_kd,
                         'loss': loss,
+                        'accuracy': accuracy,
                         'state_dict': student.state_dict(),
                         'optimizer': optimizer.state_dict()},
                         # 'scheduler': scheduler.state_dict()},
